@@ -1,4 +1,3 @@
-#![feature(duration_zero)]
 use std::time::Duration;
 
 #[macro_use(defer)]
@@ -63,7 +62,7 @@ pub fn forever<F>(f: F, period: Duration)
 where
     F: Fn() -> (),
 {
-    let (s, r) = unbounded();
+    let (_s, r) = unbounded();
     until(f, period, r)
 }
 
@@ -156,7 +155,7 @@ pub fn backoff_until<F>(
         // of every loop to prevent extra executions of f().
         select! {
             recv(stop_ch) -> _ =>  return,
-            recv(t) ->  msg => {            }
+            recv(t) ->  _msg => {            }
         }
     }
 }
@@ -240,7 +239,7 @@ impl Backoff {
         if self.factor != 0.0 {
             self.duration =
                 Duration::from_nanos((self.duration.as_nanos() as f64 * self.factor) as u64);
-            if !self.cap.is_zero() && self.duration > self.cap {
+            if !(self.cap.as_nanos() == 0) && self.duration > self.cap {
                 self.duration = self.cap;
                 self.steps = 0;
             }
@@ -475,7 +474,7 @@ pub fn poll_until<F>(interval: Duration, condition: F, stop_ch: Receiver<bool>) 
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
 {
-    return wait_for(poller(interval, Duration::zero()), condition, stop_ch);
+    return wait_for(poller(interval, Duration::new(0, 0)), condition, stop_ch);
 }
 
 // poll_immediate_until tries a condition func until it returns true, an error or stop_ch is closed.
@@ -560,7 +559,7 @@ fn poller(interval: Duration, timeout: Duration) -> Box<dyn Fn(Receiver<bool>) -
 
             // FIXME: workaround for compile error use of possibly-uninitialized `after`
             let mut after = tick(Duration::from_secs(1000000000));
-            if !timeout.is_zero() {
+            if !(timeout.as_nanos() == 0) {
                 after = tick(timeout);
             }
 
@@ -665,13 +664,16 @@ mod tests {
         });
 
         until(worker_fn, Duration::from_millis(10), r);
-        let mut counter = counter.lock().unwrap();
+        let counter = counter.lock().unwrap();
         println!("final counter {}", *counter);
         assert_eq!(true, *counter > 4);
     }
 
     #[test]
     fn test_xxx() {
+        let zero_seconds = Duration::new(0, 0);
+        assert_eq!(0, zero_seconds.as_nanos());
+
         let (s, r) = unbounded();
 
         thread::spawn(move || {
