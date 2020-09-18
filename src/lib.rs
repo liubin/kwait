@@ -17,7 +17,7 @@ use std::time::Instant;
 
 type Result = result::Result<(), Box<dyn Error>>;
 
-// Group allows to start a group of goroutines and wait for their completion.
+// Group allows to start a group of threads and wait for their completion.
 pub struct Group {
     wg: WaitGroup,
 }
@@ -29,11 +29,11 @@ impl Group {
         }
     }
 
-    pub fn wait(&self) {
-        self.wg.clone().wait();
+    pub fn wait(self) {
+        self.wg.wait();
     }
 
-    // start_with_channel starts f in a new goroutine in the group.
+    // start_with_channel starts f in a new thread in the group.
     // stop_ch is passed to f as an argument. f should stop when stop_ch is available.
     pub fn start_with_channel<F>(&self, stop_ch: Receiver<bool>, f: F)
     where
@@ -42,7 +42,7 @@ impl Group {
         self.start(move || f(stop_ch.clone()));
     }
 
-    // start starts f in a new goroutine in the group.
+    // start starts f in a new thread in the group.
     pub fn start<F>(&self, f: F)
     where
         F: Fn() -> () + std::marker::Send + 'static,
@@ -685,5 +685,48 @@ mod tests {
         let msg2 = r.recv().unwrap();
 
         assert_eq!(msg1 + msg2, 3);
+    }
+
+    #[test]
+    fn test_groups() {
+        let counter = Arc::new(Mutex::new(0));
+
+        let counter1 = counter.clone();
+        let worker_fn1 = move || {
+            let mut counter = counter1.lock().unwrap();
+            *counter += 1;
+            thread::sleep(Duration::from_millis(50));
+            println!("worker 1 finished");
+        };
+
+        let (s, r) = unbounded();
+        let counter2 = counter.clone();
+        let worker_fn2 = move |x| {
+            let mut counter = counter2.lock().unwrap();
+            *counter += 1;
+            select! {
+                recv(x) -> _ => {
+                    println!("worker 2 finished");
+                }
+            }
+        };
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(300));
+            drop(s);
+            println!("notify worker 2 to finish");
+        });
+
+        let group = Group::new();
+
+        group.start(worker_fn1);
+        println!("worker 1 started");
+
+        group.start_with_channel(r, worker_fn2);
+        println!("worker 2 started");
+
+        println!("wait two workeres to finish");
+        group.wait();
+        println!("two workeres are finished");
     }
 }
