@@ -1,12 +1,19 @@
 [package]
 name = "kwait"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["bin liu <liubin0329@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A wait library for retry/wait/loop inspired by K8s"
+license-file = "LICENSE"
+categories = ["concurrency", "development-tools"]
+homepage = "https://github.com/liubin/kwait"
+readme = "README.md"
 
 [dependencies]
 crossbeam = "0.7"
 scopeguard = "1.1.0"
 rand = "0.7"
+
+[badges]
+appveyor = { repository = "liubin/kwait", branch = "master", service = "github" }
+travis-ci = { repository = "liubin/kwait", branch = "master" }

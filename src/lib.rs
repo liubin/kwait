@@ -17,7 +17,7 @@ use std::time::Instant;
 
 type Result = result::Result<(), Box<dyn Error>>;
 
-// Group allows to start a group of threads and wait for their completion.
+/// Group allows to start a group of threads and wait for their completion.
 pub struct Group {
     wg: WaitGroup,
 }
@@ -33,8 +33,9 @@ impl Group {
         self.wg.wait();
     }
 
-    // start_with_channel starts f in a new thread in the group.
-    // stop_ch is passed to f as an argument. f should stop when stop_ch is available.
+    /// start_with_channel starts f in a new thread in the group.
+    /// stop_ch is passed to f as an argument.
+    /// f should stop when stop_ch is available.
     pub fn start_with_channel<F>(&self, stop_ch: Receiver<bool>, f: F)
     where
         F: Fn(Receiver<bool>) -> () + 'static + std::marker::Send + std::marker::Sync,
@@ -42,7 +43,7 @@ impl Group {
         self.start(move || f(stop_ch.clone()));
     }
 
-    // start starts f in a new thread in the group.
+    /// start starts f in a new thread in the group.
     pub fn start<F>(&self, f: F)
     where
         F: Fn() -> () + std::marker::Send + 'static,
@@ -55,9 +56,9 @@ impl Group {
     }
 }
 
-// forever calls f every period for ever.
-//
-// forever is syntactic sugar on top of until.
+/// forever calls f every period for ever.
+///
+/// forever is syntactic sugar on top of until.
 pub fn forever<F>(f: F, period: Duration)
 where
     F: Fn() -> (),
@@ -66,11 +67,11 @@ where
     until(f, period, r)
 }
 
-// until loops until stop channel is closed, running f every period.
-//
-// until is syntactic sugar on top of jitter_until with zero jitter factor and
-// with sliding = true (which means the timer for period starts after the f
-// completes).
+/// until loops until stop channel is closed, running f every period.
+///
+/// until is syntactic sugar on top of jitter_until with zero jitter factor and
+/// with sliding = true (which means the timer for period starts after the f
+/// completes).
 pub fn until<F>(f: F, period: Duration, stop_ch: Receiver<bool>)
 where
     F: Fn() -> (),
@@ -78,12 +79,12 @@ where
     jitter_until(f, period, 0.0, true, stop_ch)
 }
 
-// non_sliding_until loops until stop channel is closed, running f every
-// period.
-//
-// non_sliding_until is syntactic sugar on top of jitter_until with zero jitter
-// factor, with sliding = false (meaning the timer for period starts at the same
-// time as the function starts).
+/// non_sliding_until loops until stop channel is closed, running f every
+/// period.
+///
+/// non_sliding_until is syntactic sugar on top of jitter_until with zero jitter
+/// factor, with sliding = false (meaning the timer for period starts at the same
+/// time as the function starts).
 pub fn non_sliding_until<F>(f: F, period: Duration, stop_ch: Receiver<bool>)
 where
     F: Fn() -> (),
@@ -91,16 +92,16 @@ where
     jitter_until(f, period, 0.0, false, stop_ch)
 }
 
-// jitter_until loops until stop channel is closed, running f every period.
-//
-// If jitter_factor is positive, the period is jittered before every run of f.
-// If jitter_factor is not positive, the period is unchanged and not jittered.
-//
-// If sliding is true, the period is computed after f runs. If it is false then
-// period includes the runtime for f.
-//
-// Close stop_ch to stop. f may not be invoked if stop channel is already
-// closed. Pass NeverStop to if you don't want it stop.
+/// jitter_until loops until stop channel is closed, running f every period.
+///
+/// If jitter_factor is positive, the period is jittered before every run of f.
+/// If jitter_factor is not positive, the period is unchanged and not jittered.
+///
+/// If sliding is true, the period is computed after f runs. If it is false then
+/// period includes the runtime for f.
+///
+/// Close stop_ch to stop. f may not be invoked if stop channel is already
+/// closed. Pass NeverStop to if you don't want it stop.
 pub fn jitter_until<F>(
     f: F,
     period: Duration,
@@ -118,10 +119,10 @@ pub fn jitter_until<F>(
     )
 }
 
-// backoff_until loops until stop channel is closed, run f every duration given by BackoffManager.
-//
-// If sliding is true, the period is computed after f runs. If it is false then
-// period includes the runtime for f.
+/// backoff_until loops until stop channel is closed, run f every duration given by BackoffManager.
+///
+/// If sliding is true, the period is computed after f runs. If it is false then
+/// period includes the runtime for f.
 pub fn backoff_until<F>(
     f: F,
     mut backoff: Box<dyn BackoffManager>,
@@ -160,11 +161,11 @@ pub fn backoff_until<F>(
     }
 }
 
-// jitter returns a Duration between duration and duration + max_factor *
-// duration.
-//
-// This allows clients to avoid converging on periodic behavior. If max_factor
-// is 0.0, a suggested default value will be chosen.
+/// jitter returns a Duration between duration and duration + max_factor *
+/// duration.
+///
+/// This allows clients to avoid converging on periodic behavior. If max_factor
+/// is 0.0, a suggested default value will be chosen.
 pub fn jitter(duration: Duration, max_factor: f64) -> Duration {
     let mut mf = max_factor;
     if mf <= 0.0 {
@@ -174,7 +175,7 @@ pub fn jitter(duration: Duration, max_factor: f64) -> Duration {
     Duration::from_nanos((duration.as_nanos() as f64 * (1.0 + rng.gen::<u64>() as f64 * mf)) as u64)
 }
 
-// WaitTimeoutError is returned when the condition exited without success.
+/// WaitTimeoutError is returned when the condition exited without success.
 #[derive(Debug, Clone)]
 struct WaitTimeoutError;
 
@@ -185,7 +186,7 @@ impl fmt::Display for WaitTimeoutError {
 }
 impl Error for WaitTimeoutError {}
 
-// run_condition_with_crash_protection runs a ConditionFunc with crash protection
+/// run_condition_with_crash_protection runs a ConditionFunc with crash protection
 fn run_condition_with_crash_protection<F>(condition: F) -> std::result::Result<bool, Box<dyn Error>>
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -194,36 +195,36 @@ where
     condition()
 }
 
-// Backoff holds parameters applied to a Backoff function.
+/// Backoff holds parameters applied to a Backoff function.
 pub struct Backoff {
-    // The initial duration.
+    /// The initial duration.
     duration: Duration,
-    // Duration is multiplied by factor each iteration, if factor is not zero
-    // and the limits imposed by steps and cap have not been reached.
-    // Should not be negative.
-    // The jitter does not contribute to the updates to the duration parameter.
+    /// Duration is multiplied by factor each iteration, if factor is not zero
+    /// and the limits imposed by steps and cap have not been reached.
+    /// Should not be negative.
+    /// The jitter does not contribute to the updates to the duration parameter.
     factor: f64,
-    // The sleep at each iteration is the duration plus an additional
-    // amount chosen uniformly at random from the interval between
-    // zero and `jitter*duration`.
+    /// The sleep at each iteration is the duration plus an additional
+    /// amount chosen uniformly at random from the interval between
+    /// zero and `jitter*duration`.
     jitter: f64,
-    // The remaining number of iterations in which the duration
-    // parameter may change (but progress can be stopped earlier by
-    // hitting the cap). If not positive, the duration is not
-    // changed. Used for exponential backoff in combination with
-    // factor and cap.
+    /// The remaining number of iterations in which the duration
+    /// parameter may change (but progress can be stopped earlier by
+    /// hitting the cap). If not positive, the duration is not
+    /// changed. Used for exponential backoff in combination with
+    /// factor and cap.
     steps: i32,
-    // A limit on revised values of the duration parameter. If a
-    // multiplication by the factor parameter would make the duration
-    // exceed the cap then the duration is set to the cap and the
-    // steps parameter is set to zero.
+    /// A limit on revised values of the duration parameter. If a
+    /// multiplication by the factor parameter would make the duration
+    /// exceed the cap then the duration is set to the cap and the
+    /// steps parameter is set to zero.
     cap: Duration,
 }
 
 impl Backoff {
-    // step (1) returns an amount of time to sleep determined by the
-    // original duration and jitter and (2) mutates the provided Backoff
-    // to update its steps and duration.
+    /// step (1) returns an amount of time to sleep determined by the
+    /// original duration and jitter and (2) mutates the provided Backoff
+    /// to update its steps and duration.
     pub fn step(&mut self) -> Duration {
         if self.steps < 1 {
             if self.jitter > 0.0 {
@@ -253,16 +254,16 @@ impl Backoff {
     }
 }
 
-// BackoffManager manages backoff with a particular scheme based on its underlying implementation. It provides
-// an interface to return a timer for backoff, and caller shall backoff until Timer.C() drains. If the second backoff()
-// is called before the timer from the first backoff() call finishes, the first timer will NOT be drained and result in
-// undetermined behavior.
-// The BackoffManager is supposed to be called in a single-threaded environment.
+/// BackoffManager manages backoff with a particular scheme based on its underlying implementation. It provides
+/// an interface to return a timer for backoff, and caller shall backoff until Timer.C() drains. If the second backoff()
+/// is called before the timer from the first backoff() call finishes, the first timer will NOT be drained and result in
+/// undetermined behavior.
+/// The BackoffManager is supposed to be called in a single-threaded environment.
 pub trait BackoffManager {
     fn backoff(&mut self) -> Receiver<Instant>;
 }
 
-struct ExponentialBackoffManager {
+pub struct ExponentialBackoffManager {
     backoff: Backoff,
     last_backoff_start: Instant,
     initial_backoff: Duration,
@@ -270,20 +271,20 @@ struct ExponentialBackoffManager {
 }
 
 impl BackoffManager for ExponentialBackoffManager {
-    // Backoff implements BackoffManager.backoff,
-    // it returns a timer so caller can block on the timer for exponential backoff.
-    // The returned timer must be drained before calling backoff() the second time
+    /// Backoff implements BackoffManager.backoff,
+    /// it returns a timer so caller can block on the timer for exponential backoff.
+    /// The returned timer must be drained before calling backoff() the second time
     fn backoff(&mut self) -> Receiver<Instant> {
         tick(self.get_next_backoff())
     }
 }
 
 impl ExponentialBackoffManager {
-    // new_exponential_backoff_manager returns a manager for managing exponential backoff.
-    // Each backoff is jittered and
-    // backoff will not exceed the given max.
-    // If the backoff is not called within reset_duration, the backoff is reset.
-    // This backoff manager is used to reduce load during upstream unhealthiness.
+    /// new_exponential_backoff_manager returns a manager for managing exponential backoff.
+    /// Each backoff is jittered and
+    /// backoff will not exceed the given max.
+    /// If the backoff is not called within reset_duration, the backoff is reset.
+    /// This backoff manager is used to reduce load during upstream unhealthiness.
     pub fn new_exponential_backoff_manager(
         init_backoff: Duration,
         max_backoff: Duration,
@@ -318,24 +319,24 @@ impl ExponentialBackoffManager {
     }
 }
 
-struct JitteredBackoffManager {
+pub struct JitteredBackoffManager {
     duration: Duration,
     jitter: f64,
 }
 
 impl BackoffManager for JitteredBackoffManager {
-    // backoff implements BackoffManager.backoff,
-    // it returns a timer so caller can block on the timer for jittered backoff.
-    // The returned timer must be drained before calling backoff() the second time
+    /// backoff implements BackoffManager.backoff,
+    /// it returns a timer so caller can block on the timer for jittered backoff.
+    /// The returned timer must be drained before calling backoff() the second time
     fn backoff(&mut self) -> Receiver<Instant> {
         tick(self.get_next_backoff())
     }
 }
 
 impl JitteredBackoffManager {
-    // new_jittered_backoff_manager returns a BackoffManager that backoffs with given duration plus given jitter.
-    // If the jitter
-    // is negative, backoff will not be jittered.
+    /// new_jittered_backoff_manager returns a BackoffManager that backoffs with given duration plus given jitter.
+    /// If the jitter
+    /// is negative, backoff will not be jittered.
     pub fn new_jittered_backoff_manager(
         duration: Duration,
         jitter: f64,
@@ -355,16 +356,16 @@ impl JitteredBackoffManager {
     }
 }
 
-// exponential_backoff repeats a condition check with exponential backoff.
-//
-// It repeatedly checks the condition and then sleeps, using `backoff.step()`
-// to determine the length of the sleep and adjust Duration and steps.
-// Stops and returns as soon as:
-// 1. the condition check returns true or an error,
-// 2. `backoff.steps` checks of the condition have been done, or
-// 3. a sleep truncated by the cap on duration has been completed.
-// In case (1) the returned error is what the condition function returned.
-// In all other cases, WaitTimeoutError is returned.
+/// exponential_backoff repeats a condition check with exponential backoff.
+///
+/// It repeatedly checks the condition and then sleeps, using `backoff.step()`
+/// to determine the length of the sleep and adjust Duration and steps.
+/// Stops and returns as soon as:
+/// 1. the condition check returns true or an error,
+/// 2. `backoff.steps` checks of the condition have been done, or
+/// 3. a sleep truncated by the cap on duration has been completed.
+/// In case (1) the returned error is what the condition function returned.
+/// In all other cases, WaitTimeoutError is returned.
 pub fn exponential_backoff<F>(backoff: &mut Backoff, condition: F) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -382,16 +383,16 @@ where
     Err(Box::new(WaitTimeoutError))
 }
 
-// poll tries a condition func until it returns true, an error, or the timeout
-// is reached.
-//
-// poll always waits the interval before the run of 'condition'.
-// 'condition' will always be invoked at least once.
-//
-// Some intervals may be missed if the condition takes too long or the time
-// window is too short.
-//
-// If you want to poll something forever, see poll_infinite.
+/// poll tries a condition func until it returns true, an error, or the timeout
+/// is reached.
+///
+/// poll always waits the interval before the run of 'condition'.
+/// 'condition' will always be invoked at least once.
+///
+/// Some intervals may be missed if the condition takes too long or the time
+/// window is too short.
+///
+/// If you want to poll something forever, see poll_infinite.
 pub fn poll<F>(interval: Duration, timeout: Duration, condition: F) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -407,16 +408,16 @@ where
     wait_for(wait, condition, r)
 }
 
-// poll_immediate tries a condition func until it returns true, an error, or the timeout
-// is reached.
-//
-// poll_immediate always checks 'condition' before waiting for the interval. 'condition'
-// will always be invoked at least once.
-//
-// Some intervals may be missed if the condition takes too long or the time
-// window is too short.
-//
-// If you want to immediately poll something forever, see poll_immediate_infinite.
+/// poll_immediate tries a condition func until it returns true, an error, or the timeout
+/// is reached.
+///
+/// poll_immediate always checks 'condition' before waiting for the interval. 'condition'
+/// will always be invoked at least once.
+///
+/// Some intervals may be missed if the condition takes too long or the time
+/// window is too short.
+///
+/// If you want to immediately poll something forever, see poll_immediate_infinite.
 pub fn poll_immediate<F>(interval: Duration, timeout: Duration, condition: F) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -438,12 +439,12 @@ where
     poll_internal(wait, condition)
 }
 
-// poll_infinite tries a condition func until it returns true or an error
-//
-// poll_infinite always waits the interval before the run of 'condition'.
-//
-// Some intervals may be missed if the condition takes too long or the time
-// window is too short.
+/// poll_infinite tries a condition func until it returns true or an error
+///
+/// poll_infinite always waits the interval before the run of 'condition'.
+///
+/// Some intervals may be missed if the condition takes too long or the time
+/// window is too short.
 pub fn poll_infinite<F>(interval: Duration, condition: F) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -452,12 +453,12 @@ where
     return poll_until(interval, condition, r);
 }
 
-// poll_immediate_infinite tries a condition func until it returns true or an error
-//
-// poll_immediate_infinite runs the 'condition' before waiting for the interval.
-//
-// Some intervals may be missed if the condition takes too long or the time
-// window is too short.
+/// poll_immediate_infinite tries a condition func until it returns true or an error
+///
+/// poll_immediate_infinite runs the 'condition' before waiting for the interval.
+///
+/// Some intervals may be missed if the condition takes too long or the time
+/// window is too short.
 pub fn poll_immediate_infinite<F>(interval: Duration, condition: F) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -469,11 +470,11 @@ where
     poll_infinite(interval, condition)
 }
 
-// poll_until tries a condition func until it returns true, an error or stop_ch is
-// closed.
-//
-// poll_until always waits interval before the first run of 'condition'.
-// 'condition' will always be invoked at least once.
+/// poll_until tries a condition func until it returns true, an error or stop_ch is
+/// closed.
+///
+/// poll_until always waits interval before the first run of 'condition'.
+/// 'condition' will always be invoked at least once.
 pub fn poll_until<F>(interval: Duration, condition: F, stop_ch: Receiver<bool>) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -481,10 +482,10 @@ where
     return wait_for(poller(interval, Duration::new(0, 0)), condition, stop_ch);
 }
 
-// poll_immediate_until tries a condition func until it returns true, an error or stop_ch is closed.
-//
-// poll_immediate_until runs the 'condition' before waiting for the interval.
-// 'condition' will always be invoked at least once.
+/// poll_immediate_until tries a condition func until it returns true, an error or stop_ch is closed.
+///
+/// poll_immediate_until runs the 'condition' before waiting for the interval.
+/// 'condition' will always be invoked at least once.
 pub fn poll_immediate_until<F>(interval: Duration, condition: F, stop_ch: Receiver<bool>) -> Result
 where
     F: Fn() -> std::result::Result<bool, Box<dyn Error>> + Copy,
@@ -500,21 +501,21 @@ where
     }
 }
 
-// wait_for continually checks 'fn' as driven by 'wait'.
-//
-// wait_for gets a channel from 'wait()', and then invokes 'fn' once for every value
-// placed on the channel and once more when the channel is closed. If the channel is closed
-// and 'fn' returns false without error, wait_for returns WaitTimeoutError.
-//
-// If 'fn' returns an error the loop ends and that error is returned. If
-// 'fn' returns true the loop ends and nil is returned.
-//
-// WaitTimeoutError will be returned if the 'done' channel is closed without fn ever
-// returning true.
-//
-// When the done channel is closed, because the golang `select` statement is
-// "uniform pseudo-random", the `fn` might still run one or multiple time,
-// though eventually `wait_for` will return.
+/// wait_for continually checks 'fn' as driven by 'wait'.
+///
+/// wait_for gets a channel from 'wait()', and then invokes 'fn' once for every value
+/// placed on the channel and once more when the channel is closed. If the channel is closed
+/// and 'fn' returns false without error, wait_for returns WaitTimeoutError.
+///
+/// If 'fn' returns an error the loop ends and that error is returned. If
+/// 'fn' returns true the loop ends and nil is returned.
+///
+/// WaitTimeoutError will be returned if the 'done' channel is closed without fn ever
+/// returning true.
+///
+/// When the done channel is closed, because the golang `select` statement is
+/// "uniform pseudo-random", the `fn` might still run one or multiple time,
+/// though eventually `wait_for` will return.
 pub fn wait_for<F>(
     wait: Box<dyn Fn(Receiver<bool>) -> Receiver<bool>>,
     func: F,
@@ -543,17 +544,17 @@ where
     }
 }
 
-// poller returns a Box<dyn Fn(Receiver<bool>) -> Receiver<bool>>
-// that will send to the channel every interval until
-// timeout has elapsed and then closes the channel.
-//
-// Over very short intervals you may receive no ticks before the channel is
-// closed. A timeout of 0.0 is interpreted as an infinity, and in such a case
-// it would be the caller's responsibility to close the done channel.
-// Failure to do so would result in a leaked goroutine.
-//
-// Output ticks are not buffered. If the channel is not ready to receive an
-// item, the tick is skipped.
+/// poller returns a Box<dyn Fn(Receiver<bool>) -> Receiver<bool>>
+/// that will send to the channel every interval until
+/// timeout has elapsed and then closes the channel.
+///
+/// Over very short intervals you may receive no ticks before the channel is
+/// closed. A timeout of 0.0 is interpreted as an infinity, and in such a case
+/// it would be the caller's responsibility to close the done channel.
+/// Failure to do so would result in a leaked goroutine.
+///
+/// Output ticks are not buffered. If the channel is not ready to receive an
+/// item, the tick is skipped.
 fn poller(interval: Duration, timeout: Duration) -> Box<dyn Fn(Receiver<bool>) -> Receiver<bool>> {
     let func = move |done: Receiver<bool>| -> Receiver<bool> {
         let (s, r) = unbounded();
