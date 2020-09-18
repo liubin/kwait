@@ -112,7 +112,7 @@ pub fn jitter_until<F>(
 {
     backoff_until(
         f,
-        JitteredBackoffManagerImpl::new_jittered_backoff_manager(period, jitter_factor),
+        JitteredBackoffManager::new_jittered_backoff_manager(period, jitter_factor),
         sliding,
         stop_ch,
     )
@@ -199,7 +199,7 @@ pub struct Backoff {
     // The initial duration.
     duration: Duration,
     // Duration is multiplied by factor each iteration, if factor is not zero
-    // and the limits imposed by steps and Cap have not been reached.
+    // and the limits imposed by steps and cap have not been reached.
     // Should not be negative.
     // The jitter does not contribute to the updates to the duration parameter.
     factor: f64,
@@ -211,7 +211,7 @@ pub struct Backoff {
     // parameter may change (but progress can be stopped earlier by
     // hitting the cap). If not positive, the duration is not
     // changed. Used for exponential backoff in combination with
-    // Factor and Cap.
+    // factor and cap.
     steps: i32,
     // A limit on revised values of the duration parameter. If a
     // multiplication by the factor parameter would make the duration
@@ -222,8 +222,8 @@ pub struct Backoff {
 
 impl Backoff {
     // step (1) returns an amount of time to sleep determined by the
-    // original Duration and jitter and (2) mutates the provided Backoff
-    // to update its steps and Duration.
+    // original duration and jitter and (2) mutates the provided Backoff
+    // to update its steps and duration.
     pub fn step(&mut self) -> Duration {
         if self.steps < 1 {
             if self.jitter > 0.0 {
@@ -262,24 +262,27 @@ pub trait BackoffManager {
     fn backoff(&mut self) -> Receiver<Instant>;
 }
 
-struct ExponentialBackoffManagerImpl {
+struct ExponentialBackoffManager {
     backoff: Backoff,
     last_backoff_start: Instant,
     initial_backoff: Duration,
     backoff_reset_duration: Duration,
 }
 
-impl BackoffManager for ExponentialBackoffManagerImpl {
-    // Backoff implements BackoffManager.Backoff, it returns a timer so caller can block on the timer for exponential backoff.
+impl BackoffManager for ExponentialBackoffManager {
+    // Backoff implements BackoffManager.backoff,
+    // it returns a timer so caller can block on the timer for exponential backoff.
     // The returned timer must be drained before calling backoff() the second time
     fn backoff(&mut self) -> Receiver<Instant> {
         tick(self.get_next_backoff())
     }
 }
 
-impl ExponentialBackoffManagerImpl {
-    // new_exponential_backoff_manager returns a manager for managing exponential backoff. Each backoff is jittered and
-    // backoff will not exceed the given max. If the backoff is not called within resetDuration, the backoff is reset.
+impl ExponentialBackoffManager {
+    // new_exponential_backoff_manager returns a manager for managing exponential backoff.
+    // Each backoff is jittered and
+    // backoff will not exceed the given max.
+    // If the backoff is not called within reset_duration, the backoff is reset.
     // This backoff manager is used to reduce load during upstream unhealthiness.
     pub fn new_exponential_backoff_manager(
         init_backoff: Duration,
@@ -288,13 +291,13 @@ impl ExponentialBackoffManagerImpl {
         backoff_factor: f64,
         jitter: f64,
     ) -> Box<dyn BackoffManager> {
-        Box::new(ExponentialBackoffManagerImpl {
+        Box::new(ExponentialBackoffManager {
             backoff: Backoff {
                 duration: init_backoff,
                 factor: backoff_factor,
                 jitter: jitter,
 
-                // the current impl of wait.Backoff returns Backoff.Duration once steps are used up, which is not
+                // the current impl of wait.backoff returns Backoff.duration once steps are used up, which is not
                 // what we ideally need here, we set it to max int and assume we will never use up the steps
                 steps: std::i32::MAX,
                 cap: max_backoff,
@@ -315,20 +318,21 @@ impl ExponentialBackoffManagerImpl {
     }
 }
 
-struct JitteredBackoffManagerImpl {
+struct JitteredBackoffManager {
     duration: Duration,
     jitter: f64,
 }
 
-impl BackoffManager for JitteredBackoffManagerImpl {
-    // Backoff implements BackoffManager.Backoff, it returns a timer so caller can block on the timer for jittered backoff.
+impl BackoffManager for JitteredBackoffManager {
+    // backoff implements BackoffManager.backoff,
+    // it returns a timer so caller can block on the timer for jittered backoff.
     // The returned timer must be drained before calling backoff() the second time
     fn backoff(&mut self) -> Receiver<Instant> {
         tick(self.get_next_backoff())
     }
 }
 
-impl JitteredBackoffManagerImpl {
+impl JitteredBackoffManager {
     // new_jittered_backoff_manager returns a BackoffManager that backoffs with given duration plus given jitter.
     // If the jitter
     // is negative, backoff will not be jittered.
@@ -336,7 +340,7 @@ impl JitteredBackoffManagerImpl {
         duration: Duration,
         jitter: f64,
     ) -> Box<dyn BackoffManager> {
-        Box::new(JitteredBackoffManagerImpl {
+        Box::new(JitteredBackoffManager {
             duration: duration,
             jitter: jitter,
         }) as Box<dyn BackoffManager>
@@ -728,5 +732,58 @@ mod tests {
         println!("wait two workeres to finish");
         group.wait();
         println!("two workeres are finished");
+    }
+
+    #[test]
+    fn test_exponential_backoff_manager() {
+        // backoff at least 1ms, 2ms, 4ms, 8ms, 10ms, 10ms, 10ms
+        let duration_factors = vec![1, 2, 4, 8, 10, 10, 10];
+        let mut backoff_mgr = ExponentialBackoffManager::new_exponential_backoff_manager(
+            Duration::from_millis(1),
+            Duration::from_millis(10),
+            Duration::from_secs(3600),
+            2.0,
+            0.0,
+        );
+
+        for i in duration_factors {
+            let start = Instant::now();
+
+            let r = backoff_mgr.backoff();
+            select! {
+                recv(r) -> _ => {},
+            }
+            let passed = Instant::now().duration_since(start).as_millis();
+
+            assert_eq!(
+                true,
+                passed >= i,
+                "backoff should be at least {} ms, but got {}",
+                i,
+                passed
+            );
+        }
+    }
+
+    #[test]
+    fn test_jitter_backoff_manager_with_real_clock() {
+        let mut backoff_mgr =
+            JitteredBackoffManager::new_jittered_backoff_manager(Duration::from_millis(1), 0.0);
+
+        for _ in 0..5 {
+            let start = Instant::now();
+            let r = backoff_mgr.backoff();
+            select! {
+                recv(r) -> _ => {},
+            }
+            let passed = Instant::now().duration_since(start).as_millis();
+
+            assert_eq!(
+                true,
+                passed >= 1,
+                "backoff should be at least 1ms, but got {}",
+                passed
+            );
+        }
     }
 }
